@@ -75,9 +75,9 @@
         <div class="flex-grow flex flex-col gap-6 min-w-0">
             
             <!-- Canvas Container -->
-            <div id="canvas-container" class="bg-slate-900 border border-slate-800 rounded-xl p-1 shadow-lg overflow-hidden flex items-center justify-center relative min-h-[300px] md:min-h-[450px]">
-                <!-- Canvas will dynamically resize -->
-                <canvas id="optics-canvas" class="w-full h-full cursor-crosshair"></canvas>
+            <!-- FIX: Removed p-1, added flex-1 and made the canvas strictly absolute so it matches parent bounds without pushing them out -->
+            <div id="canvas-container" class="bg-slate-900 border border-slate-800 rounded-xl shadow-lg overflow-hidden relative flex-1 min-h-[300px] md:min-h-[450px]">
+                <canvas id="optics-canvas" class="absolute inset-0 w-full h-full cursor-crosshair"></canvas>
                 
                 <!-- Legend overlays -->
                 <div class="absolute top-4 left-4 bg-slate-950/80 backdrop-blur border border-slate-800 rounded-md p-3 text-xs flex flex-col gap-2 pointer-events-none">
@@ -276,15 +276,13 @@
             const imgProps = calculateImage();
             const ctx = canvas.getContext('2d');
             
-            const rect = container.getBoundingClientRect();
-            const logicalWidth = rect.width;
-            const logicalHeight = rect.height;
+            // FIX: Read explicitly from the absolute bounds of the canvas, don't set inline styles
+            const logicalWidth = canvas.clientWidth;
+            const logicalHeight = canvas.clientHeight;
             const dpr = window.devicePixelRatio || 1;
 
             canvas.width = logicalWidth * dpr;
             canvas.height = logicalHeight * dpr;
-            canvas.style.width = `${logicalWidth}px`;
-            canvas.style.height = `${logicalHeight}px`;
 
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -305,6 +303,7 @@
             };
 
             const drawHighQualityArrow = (x, y, h, color, isDashed = false) => {
+                // Point-sized image handling
                 if (Math.abs(h) < 2 && imgProps.isInfinity && imgProps.u <= -490) {
                     ctx.beginPath();
                     ctx.fillStyle = color;
@@ -342,7 +341,6 @@
                 ctx.restore();
             };
 
-            // Enhanced arrow head that guarantees visibility by placing it exactly at the midpoint
             const drawRayArrowhead = (x1, y1, x2, y2, color) => {
                 const dx = x2 - x1;
                 const dy = y2 - y1;
@@ -437,7 +435,7 @@
             const virtColor = '#94a3b8'; // slate-400
 
             if (imgProps.u <= -490) {
-                // Rays from Infinity
+                // Rays from Infinity (Object at ∞)
                 drawLine(-logicalWidth/2, h, 0, h, rayColor);
                 drawLine(-logicalWidth/2, -h, 0, -h, rayColor);
                 drawRayArrowhead(-logicalWidth/2, h, 0, h, rayColor);
@@ -447,7 +445,6 @@
                     drawLine(0, h, f, 0, refrColor); drawLine(f, 0, f - logicalWidth, -h*(logicalWidth/Math.abs(f)), refrColor);
                     drawLine(0, -h, f, 0, refrColor); drawLine(f, 0, f - logicalWidth, h*(logicalWidth/Math.abs(f)), refrColor);
                 } else if (opticMode === 'mirror' && opticType === 'convex') {
-                    // Reflected rays must correctly bounce leftwards (-logicalWidth)
                     drawLine(0, h, -logicalWidth, h + h*(logicalWidth/Math.abs(f)), refrColor); drawLine(0, h, f, 0, virtColor, 1.5, true);
                     drawLine(0, -h, -logicalWidth, -h - h*(logicalWidth/Math.abs(f)), refrColor); drawLine(0, -h, f, 0, virtColor, 1.5, true);
                 } else if (opticMode === 'lens' && opticType === 'convex') {
@@ -465,62 +462,105 @@
                 if (opticMode === 'mirror') {
                     if (opticType === 'concave') {
                         const slope1 = (0 - h) / (f - 0); 
-                        drawLine(0, h, -logicalWidth, h + slope1 * (-logicalWidth - 0), refrColor);
-                        drawRayArrowhead(0, h, f, 0, refrColor);
-                        if (v > 0) drawLine(0, h, logicalWidth, h + slope1 * logicalWidth, virtColor, 1.5, true); // Complete virtual ray
+                        
+                        if (isInfinity || v < 0) {
+                            // Real Image: Stop ray EXACTLY at v (or edge of screen)
+                            let endX = isInfinity ? -logicalWidth : v;
+                            drawLine(0, h, endX, h + slope1 * endX, refrColor);
+                            drawRayArrowhead(0, h, f, 0, refrColor); // Arrowhead pointing to F
+                        } else {
+                            // Virtual Image: Stop virtual ray EXACTLY at v
+                            drawLine(0, h, -logicalWidth, h + slope1 * (-logicalWidth), refrColor);
+                            drawRayArrowhead(0, h, f, 0, refrColor);
+                            drawLine(0, h, v, h + slope1 * v, virtColor, 1.5, true); 
+                        }
+                        
+                        drawLine(u, h, 0, 0, rayColor);
+                        drawRayArrowhead(u, h, u/2, u/2 * (h/u), rayColor);
+                        const slope2 = -h / u; 
+                        
+                        if (isInfinity || v < 0) {
+                            let endX = isInfinity ? -logicalWidth : v;
+                            drawLine(0, 0, endX, 0 + slope2 * endX, refrColor);
+                            let awX = Math.max(endX / 2, -150); // Ensure arrowhead is visible
+                            if (isInfinity) awX = -150;
+                            drawRayArrowhead(0, 0, awX, awX * slope2, refrColor);
+                        } else {
+                            drawLine(0, 0, -logicalWidth, 0 + slope2 * (-logicalWidth), refrColor);
+                            drawRayArrowhead(0, 0, -150, -150 * slope2, refrColor);
+                            drawLine(0, 0, v, 0 + slope2 * v, virtColor, 1.5, true); // Stop virtual ray at v
+                        }
+
                     } else {
+                        // Convex Mirror
                         const slope1 = (h - 0) / (0 - f);
-                        drawLine(0, h, -logicalWidth, h + slope1 * (-logicalWidth - 0), refrColor);
+                        drawLine(0, h, -logicalWidth, h + slope1 * (-logicalWidth), refrColor);
+                        drawRayArrowhead(0, h, -100, h + slope1 * -100, refrColor);
                         drawLine(0, h, f, 0, virtColor, 1.5, true); 
-                        drawRayArrowhead(0, h, -100, h + slope1*(-100), refrColor);
-                    }
-                    
-                    drawLine(u, h, 0, 0, rayColor);
-                    drawRayArrowhead(u, h, u/2, u/2 * (h/u), rayColor);
-                    const slope2 = -h / u; 
-                    
-                    if (isInfinity) {
+                        
+                        drawLine(u, h, 0, 0, rayColor);
+                        drawRayArrowhead(u, h, u/2, u/2 * (h/u), rayColor);
+                        const slope2 = -h / u; 
+                        
                         drawLine(0, 0, -logicalWidth, 0 + slope2 * (-logicalWidth), refrColor);
-                    } else {
-                        drawLine(0, 0, -logicalWidth, 0 + slope2 * (-logicalWidth), refrColor);
-                        drawRayArrowhead(0, 0, -150, -150*slope2, refrColor); // Locked arrowhead distance so it doesn't vanish
-                        if (v > 0) drawLine(0, 0, logicalWidth, 0 + slope2 * logicalWidth, virtColor, 1.5, true);
+                        drawRayArrowhead(0, 0, -150, -150 * slope2, refrColor);
+                        drawLine(0, 0, v, 0 + slope2 * v, virtColor, 1.5, true); // Stop virtual ray at v
                     }
 
                 } else {
+                    // Lens
                     if (opticType === 'convex') {
                         const slope1 = (0 - h) / (f - 0);
-                        drawLine(0, h, logicalWidth, h + slope1 * logicalWidth, refrColor);
-                        drawRayArrowhead(0, h, f, 0, refrColor);
-                        if (v < 0) drawLine(0, h, -logicalWidth, h + slope1 * -logicalWidth, virtColor, 1.5, true); // Fully extended virtual ray
+                        
+                        if (isInfinity || v > 0) {
+                            let endX = isInfinity ? logicalWidth : v;
+                            drawLine(0, h, endX, h + slope1 * endX, refrColor);
+                            drawRayArrowhead(0, h, f, 0, refrColor);
+                        } else {
+                            drawLine(0, h, logicalWidth, h + slope1 * logicalWidth, refrColor);
+                            drawRayArrowhead(0, h, f, 0, refrColor);
+                            drawLine(0, h, v, h + slope1 * v, virtColor, 1.5, true); // Stop virtual ray at v
+                        }
+
+                        drawLine(u, h, 0, 0, rayColor);
+                        drawRayArrowhead(u, h, u/2, u/2 * (h/u), rayColor);
+                        const slope2 = h / u;
+                        
+                        if (isInfinity || v > 0) {
+                            let endX = isInfinity ? logicalWidth : v;
+                            drawLine(0, 0, endX, 0 + slope2 * endX, refrColor);
+                            let awX = Math.min(endX / 2, 150);
+                            if (isInfinity) awX = 150;
+                            drawRayArrowhead(0, 0, awX, awX * slope2, refrColor);
+                        } else {
+                            drawLine(0, 0, logicalWidth, 0 + slope2 * logicalWidth, refrColor);
+                            drawRayArrowhead(0, 0, 150, 150 * slope2, refrColor);
+                            drawLine(0, 0, v, 0 + slope2 * v, virtColor, 1.5, true); // Stop virtual ray at v
+                        }
+
                     } else {
+                        // Concave Lens
                         const slope1 = (h - 0) / (0 - f);
                         drawLine(0, h, logicalWidth, h + slope1 * logicalWidth, refrColor);
                         drawRayArrowhead(0, h, 100, h + slope1 * 100, refrColor);
-                        drawLine(0, h, -logicalWidth, h + slope1 * -logicalWidth, virtColor, 1.5, true); // Fully extended virtual ray
-                    }
+                        drawLine(0, h, f, 0, virtColor, 1.5, true); 
 
-                    drawLine(u, h, 0, 0, rayColor);
-                    drawRayArrowhead(u, h, u/2, u/2 * (h/u), rayColor);
-                    const slope2 = h / u;
-                    drawLine(0, 0, logicalWidth, 0 + slope2 * logicalWidth, refrColor);
-                    drawRayArrowhead(0, 0, 150, 150*slope2, refrColor); // Locked arrowhead distance
-                    if (v < 0) drawLine(0, 0, -logicalWidth, 0 + slope2 * -logicalWidth, virtColor, 1.5, true); // Fully extended virtual ray
+                        drawLine(u, h, 0, 0, rayColor);
+                        drawRayArrowhead(u, h, u/2, u/2 * (h/u), rayColor);
+                        const slope2 = h / u;
+                        
+                        drawLine(0, 0, logicalWidth, 0 + slope2 * logicalWidth, refrColor);
+                        drawRayArrowhead(0, 0, 150, 150 * slope2, refrColor); 
+                        drawLine(0, 0, v, 0 + slope2 * v, virtColor, 1.5, true); // Stop virtual ray at v
+                    }
                 }
             }
 
             // 5. Draw Image 
-            if (!isInfinity && Math.abs(v) < 2500) {
+            if (Math.abs(v) < 3000) {
                 const isVirtual = (opticMode === 'mirror' && v > 0) || (opticMode === 'lens' && v < 0);
-                
-                // When an object gets extremely close to the focal point, image size approaches infinity.
-                // We add a visual max-height cap to prevent drawing millions of pixels off-screen which causes UI lag.
-                let drawHeight = h * m;
-                const maxCap = logicalHeight * 2.5; 
-                if (drawHeight > maxCap) drawHeight = maxCap;
-                if (drawHeight < -maxCap) drawHeight = -maxCap;
-
-                drawHighQualityArrow(v, 0, drawHeight, isVirtual ? '#a78bfa' : '#c084fc', isVirtual); 
+                // Draw the arrow connecting exactly from the axis to the strict ray intersection
+                drawHighQualityArrow(v, 0, h * m, isVirtual ? '#a78bfa' : '#c084fc', isVirtual); 
             }
         }
 
