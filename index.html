@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScienceLab: Light Optics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Smooth transitions for interactive elements */
+        .btn-transition { transition: all 0.2s ease-in-out; }
+        /* Prevent canvas touch actions from scrolling on mobile while adjusting */
+        canvas { touch-action: none; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-200 font-sans selection:bg-sky-500/30 min-h-screen flex flex-col p-4 md:p-6">
+
+    <header class="mb-6 border-b border-slate-800 pb-4">
+        <h1 class="text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-400 flex items-center gap-3">
+            <svg class="w-7 h-7 md:w-8 md:h-8 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+            ScienceLab: Light Optics
+        </h1>
+        <p class="text-slate-400 mt-2 text-sm">High-Resolution Interactive Ray Diagrams based on NCERT Class 10 Science</p>
+    </header>
+
+    <main class="flex-grow flex flex-col xl:flex-row gap-6">
+        
+        <!-- Left/Top Panel: Controls -->
+        <div class="w-full xl:w-80 flex flex-col gap-6 shrink-0">
+            
+            <!-- Optic Selection -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
+                <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Configuration</h2>
+                
+                <div class="flex bg-slate-950 rounded-lg p-1 mb-4 border border-slate-800">
+                    <button id="mode-mirror" class="btn-transition flex-1 py-2 text-sm font-medium rounded-md bg-indigo-500/20 text-indigo-300" onclick="setOpticMode('mirror')">
+                        Mirrors
+                    </button>
+                    <button id="mode-lens" class="btn-transition flex-1 py-2 text-sm font-medium rounded-md text-slate-400 hover:text-slate-200" onclick="setOpticMode('lens')">
+                        Lenses
+                    </button>
+                </div>
+
+                <div class="flex gap-3">
+                    <button id="type-concave" class="btn-transition flex-1 py-3 px-4 rounded-lg border text-sm font-medium bg-slate-800 border-sky-500 text-sky-400 shadow-[0_0_15px_rgba(14,165,233,0.15)]" onclick="setOpticType('concave')">
+                        Concave
+                    </button>
+                    <button id="type-convex" class="btn-transition flex-1 py-3 px-4 rounded-lg border text-sm font-medium bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-600" onclick="setOpticType('convex')">
+                        Convex
+                    </button>
+                </div>
+            </div>
+
+            <!-- Object Position Slider -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex-grow flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Object Position (u)</h2>
+                    <span id="u-display" class="text-sky-400 font-mono text-sm">-300 px</span>
+                </div>
+                
+                <input 
+                    type="range" id="u-slider" min="-500" max="-10" step="1" value="-300" 
+                    class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500 mb-6"
+                    oninput="setU(parseInt(this.value))"
+                />
+
+                <h3 class="text-xs font-medium text-slate-500 mb-3">NCERT Standard Positions</h3>
+                <div id="presets-container" class="grid grid-cols-2 gap-2">
+                    <!-- Presets injected via JS -->
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right/Main Panel: Canvas & Data -->
+        <div class="flex-grow flex flex-col gap-6 min-w-0">
+            
+            <!-- Canvas Container -->
+            <div id="canvas-container" class="bg-slate-900 border border-slate-800 rounded-xl p-1 shadow-lg overflow-hidden flex items-center justify-center relative min-h-[300px] md:min-h-[450px]">
+                <!-- Canvas will dynamically resize -->
+                <canvas id="optics-canvas" class="w-full h-full cursor-crosshair"></canvas>
+                
+                <!-- Legend overlays -->
+                <div class="absolute top-4 left-4 bg-slate-950/80 backdrop-blur border border-slate-800 rounded-md p-3 text-xs flex flex-col gap-2 pointer-events-none">
+                    <div class="flex items-center gap-2"><div class="w-4 h-0.5 bg-[#fde047]"></div><span class="text-slate-300">Incident Ray</span></div>
+                    <div class="flex items-center gap-2"><div class="w-4 h-0.5 bg-[#4ade80]"></div><span class="text-slate-300">Reflected/Refracted Ray</span></div>
+                    <div class="flex items-center gap-2"><div class="w-4 h-0.5 border-t border-dashed border-[#94a3b8]"></div><span class="text-slate-300">Virtual Ray</span></div>
+                    <div class="flex items-center gap-2 mt-1 pt-1 border-t border-slate-800"><div class="w-4 h-0.5 bg-[#f87171]"></div><span class="text-slate-300">Object</span></div>
+                    <div class="flex items-center gap-2"><div class="w-4 h-0.5 bg-[#c084fc]"></div><span class="text-slate-300">Image</span></div>
+                </div>
+            </div>
+
+            <!-- Data Panel -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg">
+                <h2 class="text-sm font-semibold text-slate-200 mb-4 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Image Properties
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-950 border border-slate-800 rounded-lg p-4">
+                        <span class="block text-xs text-slate-500 uppercase tracking-wider mb-1">Position (v)</span>
+                        <span id="pos-display" class="text-slate-200 font-medium text-sm md:text-base">-</span>
+                    </div>
+                    <div class="bg-slate-950 border border-slate-800 rounded-lg p-4">
+                        <span class="block text-xs text-slate-500 uppercase tracking-wider mb-1">Nature & Size</span>
+                        <span id="nature-display" class="text-slate-200 font-medium text-sm md:text-base">-</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <script>
+        // --- State ---
+        let opticMode = 'mirror'; // 'mirror' | 'lens'
+        let opticType = 'concave'; // 'concave' | 'convex'
+        let u = -300; // Object distance
+
+        const FOCAL_LENGTH = 100;
+        const OBJECT_HEIGHT = 45;
+
+        const POSITIONS = {
+            MIRROR: [
+                { label: 'At Infinity', u: -500 },
+                { label: 'Beyond C', u: -300 },
+                { label: 'At C', u: -200 },
+                { label: 'Between C & F', u: -150 },
+                { label: 'At F', u: -100 },
+                { label: 'Between F & P', u: -50 },
+            ],
+            LENS: [
+                { label: 'At Infinity', u: -500 },
+                { label: 'Beyond 2F₁', u: -300 },
+                { label: 'At 2F₁', u: -200 },
+                { label: 'Between 2F₁ & F₁', u: -150 },
+                { label: 'At F₁', u: -100 },
+                { label: 'Between F₁ & O', u: -50 },
+            ]
+        };
+
+        // DOM Elements
+        const canvas = document.getElementById('optics-canvas');
+        const container = document.getElementById('canvas-container');
+        const uDisplay = document.getElementById('u-display');
+        const uSlider = document.getElementById('u-slider');
+        const posDisplay = document.getElementById('pos-display');
+        const natureDisplay = document.getElementById('nature-display');
+        const presetsContainer = document.getElementById('presets-container');
+
+        // --- Interaction functions ---
+        function setOpticMode(mode) {
+            opticMode = mode;
+            updateUI();
+            render();
+        }
+
+        function setOpticType(type) {
+            opticType = type;
+            updateUI();
+            render();
+        }
+
+        function setU(val) {
+            u = val;
+            uSlider.value = u;
+            updateUI();
+            render();
+        }
+
+        // --- Physics Calculations ---
+        function calculateImage() {
+            let f, v, m;
+            let isInfinity = false;
+
+            if (u <= -490) {
+                if (opticMode === 'mirror' && opticType === 'concave') { v = -FOCAL_LENGTH; m = 0; }
+                else if (opticMode === 'mirror' && opticType === 'convex') { v = FOCAL_LENGTH; m = 0; }
+                else if (opticMode === 'lens' && opticType === 'convex') { v = FOCAL_LENGTH; m = 0; }
+                else if (opticMode === 'lens' && opticType === 'concave') { v = -FOCAL_LENGTH; m = 0; }
+                return { u, v, m, f: (opticType === 'concave' && opticMode === 'mirror') || (opticType === 'concave' && opticMode === 'lens') ? -FOCAL_LENGTH : FOCAL_LENGTH, isInfinity: true };
+            }
+
+            if (opticMode === 'mirror') {
+                f = opticType === 'concave' ? -FOCAL_LENGTH : FOCAL_LENGTH;
+                if (Math.abs(u - f) < 0.1) {
+                    isInfinity = true;
+                    v = u > f ? 10000 : -10000; 
+                    m = 100;
+                } else {
+                    v = (u * f) / (u - f);
+                    m = -v / u; 
+                }
+            } else {
+                f = opticType === 'convex' ? FOCAL_LENGTH : -FOCAL_LENGTH;
+                if (Math.abs(u + f) < 0.1 && opticType === 'convex') {
+                    isInfinity = true;
+                    v = 10000;
+                    m = 100;
+                } else {
+                    v = (u * f) / (u + f);
+                    m = v / u;
+                }
+            }
+            return { u, v, m, f, isInfinity };
+        }
+
+        // --- UI Updates ---
+        function updateUI() {
+            const modeMirror = document.getElementById('mode-mirror');
+            const modeLens = document.getElementById('mode-lens');
+            if(opticMode === 'mirror') {
+                modeMirror.className = "btn-transition flex-1 py-2 text-sm font-medium rounded-md bg-indigo-500/20 text-indigo-300";
+                modeLens.className = "btn-transition flex-1 py-2 text-sm font-medium rounded-md text-slate-400 hover:text-slate-200 bg-transparent";
+            } else {
+                modeLens.className = "btn-transition flex-1 py-2 text-sm font-medium rounded-md bg-sky-500/20 text-sky-300";
+                modeMirror.className = "btn-transition flex-1 py-2 text-sm font-medium rounded-md text-slate-400 hover:text-slate-200 bg-transparent";
+            }
+
+            const typeConcave = document.getElementById('type-concave');
+            const typeConvex = document.getElementById('type-convex');
+            const activeTypeClass = "btn-transition flex-1 py-3 px-4 rounded-lg border text-sm font-medium bg-slate-800 border-sky-500 text-sky-400 shadow-[0_0_15px_rgba(14,165,233,0.15)]";
+            const inactiveTypeClass = "btn-transition flex-1 py-3 px-4 rounded-lg border text-sm font-medium bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-600";
+            
+            typeConcave.className = opticType === 'concave' ? activeTypeClass : inactiveTypeClass;
+            typeConvex.className = opticType === 'convex' ? activeTypeClass : inactiveTypeClass;
+
+            uDisplay.textContent = u > -490 ? `${u} px` : '-∞';
+
+            const presets = opticMode === 'mirror' ? POSITIONS.MIRROR : POSITIONS.LENS;
+            presetsContainer.innerHTML = presets.map(preset => {
+                const isActive = u === preset.u || (preset.u === -500 && u <= -490);
+                const activeClass = "bg-sky-500/10 border-sky-500/50 text-sky-300";
+                const inactiveClass = "bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200";
+                return `<button onclick="setU(${preset.u})" class="text-xs py-2 px-2 rounded border transition-colors ${isActive ? activeClass : inactiveClass}">${preset.label}</button>`;
+            }).join('');
+
+            const imgProps = calculateImage();
+            
+            let natureTxt = "";
+            if (imgProps.isInfinity && imgProps.u > -490) natureTxt = "Highly Enlarged, Real & Inverted (at ∞)";
+            else if (imgProps.u <= -490) {
+                if (opticMode === 'mirror' && opticType === 'concave') natureTxt = "Real & Inverted, Point-sized";
+                else if (opticMode === 'lens' && opticType === 'convex') natureTxt = "Real & Inverted, Point-sized";
+                else natureTxt = "Virtual & Erect, Point-sized";
+            } else {
+                const isVirtual = (opticMode === 'mirror' && imgProps.v > 0) || (opticMode === 'lens' && imgProps.v < 0);
+                const size = Math.abs(imgProps.m) > 1.05 ? 'Enlarged' : Math.abs(imgProps.m) < 0.95 ? 'Diminished' : 'Same Size';
+                natureTxt = `${isVirtual ? 'Virtual & Erect' : 'Real & Inverted'}, ${size} (m = ${imgProps.m.toFixed(2)})`;
+            }
+            natureDisplay.textContent = natureTxt;
+
+            let posTxt = "";
+            if (imgProps.isInfinity && imgProps.u > -490) posTxt = "At Infinity";
+            else if (imgProps.u <= -490) {
+                posTxt = opticMode === 'mirror' 
+                    ? (opticType === 'concave' ? "At F (in front)" : "At F (behind mirror)") 
+                    : (opticType === 'convex' ? "At F₂ (opposite side)" : "At F₁ (same side)");
+            } else {
+                const v = imgProps.v;
+                let side = opticMode === 'mirror' ? (v < 0 ? "in front of mirror" : "behind mirror") : (v > 0 ? "opposite side of lens" : "same side as object");
+                let posDesc = "";
+                const absV = Math.abs(v);
+                if (absV === FOCAL_LENGTH) posDesc = "At Focus (F)";
+                else if (absV === FOCAL_LENGTH * 2) posDesc = opticMode === 'mirror' ? "At Center of Curvature (C)" : "At 2F";
+                else if (absV > FOCAL_LENGTH * 2) posDesc = opticMode === 'mirror' ? "Beyond C" : "Beyond 2F";
+                else if (absV > FOCAL_LENGTH && absV < FOCAL_LENGTH * 2) posDesc = opticMode === 'mirror' ? "Between C and F" : "Between F and 2F";
+                else if (absV < FOCAL_LENGTH) posDesc = opticMode === 'mirror' ? "Between Pole and F" : "Between Optical Center and F";
+                posTxt = `${posDesc} (${Math.abs(v).toFixed(1)} px, ${side})`;
+            }
+            posDisplay.textContent = posTxt;
+        }
+
+        // --- Drawing Logic ---
+        function render() {
+            const imgProps = calculateImage();
+            const ctx = canvas.getContext('2d');
+            
+            const rect = container.getBoundingClientRect();
+            const logicalWidth = rect.width;
+            const logicalHeight = rect.height;
+            const dpr = window.devicePixelRatio || 1;
+
+            canvas.width = logicalWidth * dpr;
+            canvas.height = logicalHeight * dpr;
+            canvas.style.width = `${logicalWidth}px`;
+            canvas.style.height = `${logicalHeight}px`;
+
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.scale(dpr, dpr);
+            ctx.translate(logicalWidth / 2, logicalHeight / 2);
+            ctx.scale(1, -1);
+
+            const drawLine = (x1, y1, x2, y2, color, width = 2, dashed = false) => {
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                if (dashed) ctx.setLineDash([5, 5]); else ctx.setLineDash([]);
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            };
+
+            const drawHighQualityArrow = (x, y, h, color, isDashed = false) => {
+                if (Math.abs(h) < 2 && imgProps.isInfinity && imgProps.u <= -490) {
+                    ctx.beginPath();
+                    ctx.fillStyle = color;
+                    ctx.arc(x, 0, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    return;
+                }
+
+                drawLine(x, 0, x, h, color, 3.5, isDashed);
+                
+                ctx.beginPath();
+                ctx.fillStyle = color;
+                ctx.moveTo(x, h);
+                const dir = h > 0 ? -1 : 1; 
+                const arrowWidth = 7;
+                const arrowLength = 12;
+                ctx.lineTo(x - arrowWidth, h + dir * arrowLength);
+                ctx.lineTo(x + arrowWidth, h + dir * arrowLength);
+                ctx.closePath();
+                ctx.fill();
+            };
+
+            const drawPoint = (x, label, isBelow = true) => {
+                ctx.beginPath();
+                ctx.arc(x, 0, 3.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#64748b'; 
+                ctx.fill();
+                
+                ctx.save();
+                ctx.scale(1, -1); 
+                ctx.font = '600 14px system-ui, sans-serif';
+                ctx.fillStyle = '#94a3b8'; 
+                ctx.textAlign = 'center';
+                ctx.fillText(label, x, isBelow ? 22 : -12);
+                ctx.restore();
+            };
+
+            // Enhanced arrow head that guarantees visibility by placing it exactly at the midpoint
+            const drawRayArrowhead = (x1, y1, x2, y2, color) => {
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const angle = Math.atan2(dy, dx);
+                const midX = x1 + dx * 0.55; 
+                const midY = y1 + dy * 0.55;
+                
+                ctx.save();
+                ctx.translate(midX, midY);
+                ctx.rotate(angle);
+                ctx.beginPath();
+                ctx.moveTo(3, 0);
+                ctx.lineTo(-7, -5);
+                ctx.lineTo(-5, 0);
+                ctx.lineTo(-7, 5);
+                ctx.closePath();
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.restore();
+            };
+
+            // 1. Draw Principal Axis
+            drawLine(-logicalWidth/2, 0, logicalWidth/2, 0, '#334155', 1.5); 
+
+            // 2. Draw Optic & Points
+            ctx.beginPath();
+            ctx.strokeStyle = '#38bdf8'; 
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+
+            if (opticMode === 'mirror') {
+                drawPoint(0, 'P', true);
+                if (opticType === 'concave') {
+                    ctx.arc(100, 0, 104, Math.PI - 0.5, Math.PI + 0.5);
+                    ctx.stroke();
+                    for(let a = Math.PI - 0.45; a <= Math.PI + 0.45; a+=0.08) {
+                        let px = 100 + 104 * Math.cos(a);
+                        let py = 104 * Math.sin(a);
+                        drawLine(px, py, px + 8, py + (a > Math.PI ? -2 : 2), '#0ea5e9', 1.5);
+                    }
+                    drawPoint(-FOCAL_LENGTH, 'F');
+                    drawPoint(-FOCAL_LENGTH * 2, 'C');
+                } else {
+                    ctx.arc(-100, 0, 104, -0.5, 0.5);
+                    ctx.stroke();
+                    for(let a = -0.45; a <= 0.45; a+=0.08) {
+                        let px = -100 + 104 * Math.cos(a);
+                        let py = 104 * Math.sin(a);
+                        drawLine(px, py, px + 8, py + (a > 0 ? 2 : -2), '#0ea5e9', 1.5);
+                    }
+                    drawPoint(FOCAL_LENGTH, 'F');
+                    drawPoint(FOCAL_LENGTH * 2, 'C');
+                }
+            } else {
+                drawPoint(0, 'O', true);
+                drawPoint(-FOCAL_LENGTH, 'F₁');
+                drawPoint(-FOCAL_LENGTH * 2, '2F₁');
+                drawPoint(FOCAL_LENGTH, 'F₂');
+                drawPoint(FOCAL_LENGTH * 2, '2F₂');
+
+                if (opticType === 'convex') {
+                    ctx.beginPath();
+                    ctx.moveTo(0, 120);
+                    ctx.quadraticCurveTo(25, 0, 0, -120);
+                    ctx.quadraticCurveTo(-25, 0, 0, 120);
+                    ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+                    ctx.fill();
+                    ctx.stroke();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(-15, 120);
+                    ctx.quadraticCurveTo(10, 0, -15, -120);
+                    ctx.lineTo(15, -120);
+                    ctx.quadraticCurveTo(-10, 0, 15, 120);
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+                    ctx.fill();
+                    ctx.stroke();
+                }
+            }
+
+            // 3. Draw Object
+            if (imgProps.u > -490) {
+                drawHighQualityArrow(imgProps.u, 0, OBJECT_HEIGHT, '#f87171'); 
+            }
+
+            // 4. Draw Rays
+            const h = OBJECT_HEIGHT;
+            const { f, v, m, isInfinity } = imgProps;
+            const rayColor = '#fde047'; // yellow-300
+            const refrColor = '#4ade80'; // green-400
+            const virtColor = '#94a3b8'; // slate-400
+
+            if (imgProps.u <= -490) {
+                // Rays from Infinity
+                drawLine(-logicalWidth/2, h, 0, h, rayColor);
+                drawLine(-logicalWidth/2, -h, 0, -h, rayColor);
+                drawRayArrowhead(-logicalWidth/2, h, 0, h, rayColor);
+                drawRayArrowhead(-logicalWidth/2, -h, 0, -h, rayColor);
+
+                if (opticMode === 'mirror' && opticType === 'concave') {
+                    drawLine(0, h, f, 0, refrColor); drawLine(f, 0, f - logicalWidth, -h*(logicalWidth/Math.abs(f)), refrColor);
+                    drawLine(0, -h, f, 0, refrColor); drawLine(f, 0, f - logicalWidth, h*(logicalWidth/Math.abs(f)), refrColor);
+                } else if (opticMode === 'mirror' && opticType === 'convex') {
+                    // Reflected rays must correctly bounce leftwards (-logicalWidth)
+                    drawLine(0, h, -logicalWidth, h + h*(logicalWidth/Math.abs(f)), refrColor); drawLine(0, h, f, 0, virtColor, 1.5, true);
+                    drawLine(0, -h, -logicalWidth, -h - h*(logicalWidth/Math.abs(f)), refrColor); drawLine(0, -h, f, 0, virtColor, 1.5, true);
+                } else if (opticMode === 'lens' && opticType === 'convex') {
+                    drawLine(0, h, f, 0, refrColor); drawLine(f, 0, logicalWidth, -h*(logicalWidth/f - 1), refrColor);
+                    drawLine(0, -h, f, 0, refrColor); drawLine(f, 0, logicalWidth, h*(logicalWidth/f - 1), refrColor);
+                } else if (opticMode === 'lens' && opticType === 'concave') {
+                    drawLine(0, h, logicalWidth, h + h*(logicalWidth/Math.abs(f)), refrColor); drawLine(0, h, f, 0, virtColor, 1.5, true);
+                    drawLine(0, -h, logicalWidth, -h - h*(logicalWidth/Math.abs(f)), refrColor); drawLine(0, -h, f, 0, virtColor, 1.5, true);
+                }
+            } else {
+                // Standard Rays
+                drawLine(u, h, 0, h, rayColor); 
+                drawRayArrowhead(u, h, u/2, h, rayColor);
+
+                if (opticMode === 'mirror') {
+                    if (opticType === 'concave') {
+                        const slope1 = (0 - h) / (f - 0); 
+                        drawLine(0, h, -logicalWidth, h + slope1 * (-logicalWidth - 0), refrColor);
+                        drawRayArrowhead(0, h, f, 0, refrColor);
+                        if (v > 0) drawLine(0, h, logicalWidth, h + slope1 * logicalWidth, virtColor, 1.5, true); // Complete virtual ray
+                    } else {
+                        const slope1 = (h - 0) / (0 - f);
+                        drawLine(0, h, -logicalWidth, h + slope1 * (-logicalWidth - 0), refrColor);
+                        drawLine(0, h, f, 0, virtColor, 1.5, true); 
+                        drawRayArrowhead(0, h, -100, h + slope1*(-100), refrColor);
+                    }
+                    
+                    drawLine(u, h, 0, 0, rayColor);
+                    drawRayArrowhead(u, h, u/2, u/2 * (h/u), rayColor);
+                    const slope2 = -h / u; 
+                    
+                    if (isInfinity) {
+                        drawLine(0, 0, -logicalWidth, 0 + slope2 * (-logicalWidth), refrColor);
+                    } else {
+                        drawLine(0, 0, -logicalWidth, 0 + slope2 * (-logicalWidth), refrColor);
+                        drawRayArrowhead(0, 0, -150, -150*slope2, refrColor); // Locked arrowhead distance so it doesn't vanish
+                        if (v > 0) drawLine(0, 0, logicalWidth, 0 + slope2 * logicalWidth, virtColor, 1.5, true);
+                    }
+
+                } else {
+                    if (opticType === 'convex') {
+                        const slope1 = (0 - h) / (f - 0);
+                        drawLine(0, h, logicalWidth, h + slope1 * logicalWidth, refrColor);
+                        drawRayArrowhead(0, h, f, 0, refrColor);
+                        if (v < 0) drawLine(0, h, -logicalWidth, h + slope1 * -logicalWidth, virtColor, 1.5, true); // Fully extended virtual ray
+                    } else {
+                        const slope1 = (h - 0) / (0 - f);
+                        drawLine(0, h, logicalWidth, h + slope1 * logicalWidth, refrColor);
+                        drawRayArrowhead(0, h, 100, h + slope1 * 100, refrColor);
+                        drawLine(0, h, -logicalWidth, h + slope1 * -logicalWidth, virtColor, 1.5, true); // Fully extended virtual ray
+                    }
+
+                    drawLine(u, h, 0, 0, rayColor);
+                    drawRayArrowhead(u, h, u/2, u/2 * (h/u), rayColor);
+                    const slope2 = h / u;
+                    drawLine(0, 0, logicalWidth, 0 + slope2 * logicalWidth, refrColor);
+                    drawRayArrowhead(0, 0, 150, 150*slope2, refrColor); // Locked arrowhead distance
+                    if (v < 0) drawLine(0, 0, -logicalWidth, 0 + slope2 * -logicalWidth, virtColor, 1.5, true); // Fully extended virtual ray
+                }
+            }
+
+            // 5. Draw Image 
+            if (!isInfinity && Math.abs(v) < 2500) {
+                const isVirtual = (opticMode === 'mirror' && v > 0) || (opticMode === 'lens' && v < 0);
+                
+                // When an object gets extremely close to the focal point, image size approaches infinity.
+                // We add a visual max-height cap to prevent drawing millions of pixels off-screen which causes UI lag.
+                let drawHeight = h * m;
+                const maxCap = logicalHeight * 2.5; 
+                if (drawHeight > maxCap) drawHeight = maxCap;
+                if (drawHeight < -maxCap) drawHeight = -maxCap;
+
+                drawHighQualityArrow(v, 0, drawHeight, isVirtual ? '#a78bfa' : '#c084fc', isVirtual); 
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            render();
+        });
+
+        updateUI();
+        render();
+
+    </script>
+</body>
+</html>
