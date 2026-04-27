@@ -374,22 +374,22 @@
             if (opticMode === 'mirror') {
                 drawPoint(0, 'P', true);
                 if (opticType === 'concave') {
-                    ctx.arc(100, 0, 104, Math.PI - 0.5, Math.PI + 0.5);
-                    ctx.stroke();
-                    for(let a = Math.PI - 0.45; a <= Math.PI + 0.45; a+=0.08) {
-                        let px = 100 + 104 * Math.cos(a);
-                        let py = 104 * Math.sin(a);
-                        drawLine(px, py, px + 8, py + (a > Math.PI ? -2 : 2), '#0ea5e9', 1.5);
-                    }
-                    drawPoint(-FOCAL_LENGTH, 'F');
-                    drawPoint(-FOCAL_LENGTH * 2, 'C');
-                } else {
                     ctx.arc(-100, 0, 104, -0.5, 0.5);
                     ctx.stroke();
                     for(let a = -0.45; a <= 0.45; a+=0.08) {
                         let px = -100 + 104 * Math.cos(a);
                         let py = 104 * Math.sin(a);
                         drawLine(px, py, px + 8, py + (a > 0 ? 2 : -2), '#0ea5e9', 1.5);
+                    }
+                    drawPoint(-FOCAL_LENGTH, 'F');
+                    drawPoint(-FOCAL_LENGTH * 2, 'C');
+                } else {
+                    ctx.arc(100, 0, 104, Math.PI - 0.5, Math.PI + 0.5);
+                    ctx.stroke();
+                    for(let a = Math.PI - 0.45; a <= Math.PI + 0.45; a+=0.08) {
+                        let px = 100 + 104 * Math.cos(a);
+                        let py = 104 * Math.sin(a);
+                        drawLine(px, py, px + 8, py + (a > Math.PI ? -2 : 2), '#0ea5e9', 1.5);
                     }
                     drawPoint(FOCAL_LENGTH, 'F');
                     drawPoint(FOCAL_LENGTH * 2, 'C');
